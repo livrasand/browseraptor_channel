@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "schema_version": "1.0.0",
+  "channel": {
+    "name": "Browseraptor Channel",
+    "description": "Official plugin registry for Browseraptor — intelligent link dispatcher ecosystem",
+    "maintainer": "Browseraptor Team",
+    "homepage": "https://github.com/livrasand/browseraptor_channel",
+    "public_key": "browseraptor-channel.pub"
+  },
+  "plugins": {},
+  "signatures": {},
+  "last_updated": "2026-06-06T00:00:00Z"
+}

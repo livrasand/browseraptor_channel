@@ -1,0 +1,12 @@
+# Private keys - NEVER commit these
+repository/keys/*.sec
+repository/keys/browseraptor-channel.sec
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

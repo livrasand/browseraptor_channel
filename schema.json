@@ -1,0 +1,86 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Browseraptor Channel Index",
+  "description": "Schema for repository/index.json — the Browseraptor channel entry point",
+  "type": "object",
+  "required": ["version", "schema_version", "channel", "plugins", "last_updated"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Channel format version. Bump on breaking changes."
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semver of the channel spec."
+    },
+    "channel": {
+      "type": "object",
+      "required": ["name", "description", "maintainer", "public_key"],
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "maintainer": { "type": "string" },
+        "homepage": { "type": "string", "format": "uri" },
+        "public_key": { "type": "string" }
+      }
+    },
+    "plugins": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-z0-9-]+$": {
+          "type": "object",
+          "required": ["name", "version", "path"],
+          "properties": {
+            "name": { "type": "string" },
+            "description": { "type": "string" },
+            "author": { "type": "string" },
+            "version": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+\\.\\d+$"
+            },
+            "path": {
+              "type": "string",
+              "pattern": "^[a-z0-9]/[a-z0-9-]+\\.json$"
+            },
+            "categories": {
+              "type": "array",
+              "items": { "type": "string" },
+              "maxItems": 3
+            },
+            "tags": {
+              "type": "array",
+              "items": { "type": "string" },
+              "maxItems": 10
+            },
+            "min_browseraptor_version": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+\\.\\d+$"
+            },
+            "updated_at": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        }
+      }
+    },
+    "signatures": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-z0-9-]+$": {
+          "type": "object",
+          "properties": {
+            "ed25519": { "type": "string" }
+          },
+          "required": ["ed25519"]
+        }
+      }
+    },
+    "last_updated": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

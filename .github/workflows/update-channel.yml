@@ -1,0 +1,143 @@
+name: Update Channel
+
+on:
+  pull_request:
+    paths:
+      - 'repository/**'
+      - '.github/workflows/update-channel.yml'
+  push:
+    paths:
+      - 'repository/**'
+      - '.github/workflows/update-channel.yml'
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  update-channel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install -g jq
+
+      - name: Build channel_v1.json
+        run: |
+          # Create base channel structure
+          cat > channel_v1.json << 'EOF'
+          {
+            "version": 1,
+            "schema_version": "1.0.0",
+            "channel": {
+              "name": "Browseraptor Channel",
+              "description": "Official plugin registry for Browseraptor — intelligent link dispatcher ecosystem",
+              "maintainer": "Browseraptor Team",
+              "homepage": "https://github.com/livrasand/browseraptor_channel",
+              "public_key": "browseraptor-channel.pub"
+            },
+            "plugins": {},
+            "signatures": {},
+            "last_updated": ""
+          }
+          EOF
+
+          # Collect all plugin JSON files
+          plugins_json="{}"
+          signatures_json="{}"
+          
+          for dir in repository/*/; do
+            if [ -d "$dir" ] && [ "$(basename "$dir")" != "keys" ]; then
+              for json_file in "$dir"*.json 2>/dev/null; do
+                if [ -f "$json_file" ]; then
+                  plugin_id=$(jq -r '.id' "$json_file")
+                  if [ -n "$plugin_id" ] && [ "$plugin_id" != "null" ]; then
+                    # Add plugin to plugins object
+                    plugin_content=$(jq '.' "$json_file")
+                    plugins_json=$(echo "$plugins_json" | jq --arg id "$plugin_id" --argjson content "$plugin_content" '.[$id] = $content')
+                    
+                    # Add signature if exists
+                    signature=$(jq -r '.signatures.ed25519 // empty' "$json_file")
+                    if [ -n "$signature" ]; then
+                      signatures_json=$(echo "$signatures_json" | jq --arg id "$plugin_id" --arg sig "$signature" '.[$id] = {ed25519: $sig}')
+                    fi
+                  fi
+                fi
+              done
+            fi
+          done
+
+          # Update channel_v1.json with plugins and signatures
+          timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          channel_v1=$(jq --argjson plugins "$plugins_json" --argjson signatures "$signatures_json" --arg timestamp "$timestamp" \
+            '.plugins = $plugins | .signatures = $signatures | .last_updated = $timestamp' \
+            channel_v1.json)
+          
+          echo "$channel_v1" > channel_v1.json
+
+      - name: Sign channel_v1.json
+        if: github.event_name == 'push'
+        env:
+          CHANNEL_PRIVATE_KEY: ${{ secrets.CHANNEL_PRIVATE_KEY }}
+        run: |
+          if [ -n "$CHANNEL_PRIVATE_KEY" ]; then
+            # Save private key to file
+            echo "$CHANNEL_PRIVATE_KEY" > channel_private_key.pem
+            
+            # Sign the channel_v1.json file
+            signature=$(openssl dgst -sha256 -sign channel_private_key.pem -binary channel_v1.json | base64 -w 0)
+            
+            # Add signature to channel_v1.json
+            channel_v1=$(jq --arg sig "$signature" '.channel_signature = $sig' channel_v1.json)
+            echo "$channel_v1" > channel_v1.json
+            
+            # Clean up private key
+            rm channel_private_key.pem
+            
+            echo "✅ channel_v1.json signed successfully"
+          else
+            echo "⚠️ CHANNEL_PRIVATE_KEY not set, skipping signature"
+          fi
+
+      - name: Commit changes
+        if: github.event_name == 'push'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add channel_v1.json
+          git diff --staged --quiet || git commit -m "chore: update channel_v1.json"
+          git push
+
+      - name: Upload channel_v1.json as artifact
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: channel-v1
+          path: channel_v1.json
+
+      - name: Comment PR with channel_v1.json diff
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const channelV1 = fs.readFileSync('channel_v1.json', 'utf8');
+            const pluginCount = JSON.parse(channelV1).plugins;
+            const count = Object.keys(pluginCount).length;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## Channel Update\n\nchannel_v1.json has been updated with **${count} plugin(s)**.\n\nThe file is available as an artifact in this workflow run.`
+            });
